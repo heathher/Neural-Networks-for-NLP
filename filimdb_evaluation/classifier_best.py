@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 import math
 
-VOCAB_SIZE = 5000
+VOCAB_SIZE = 3000
 ALPHA = 0.1
 
 def count_labels(labels):
@@ -30,7 +30,6 @@ def make_vocab(tokenized_texts):
     sorted_vocab = sorted(word_dict.items(), key=lambda x:x[1], reverse = True)
     for idx in range(VOCAB_SIZE):
         vocab.append(sorted_vocab[idx][0])
-    vocab = set(vocab)
     return vocab
 
 def update_class_word_counter(tokens, class_word_counter, vocab):
@@ -59,7 +58,7 @@ def train(train_texts, train_labels):
             neg_word_counter += update_class_word_counter(text, negative_class_word_counter, my_vocab)
         else:
             pos_word_counter += update_class_word_counter(text, positive_class_word_counter, my_vocab)
-    params = [pos_word_counter, neg_word_counter, positive_class_word_counter, negative_class_word_counter]
+    params = [pos_word_counter, neg_word_counter, positive_class_word_counter, negative_class_word_counter, my_vocab]
     return params
    
 
@@ -77,18 +76,39 @@ def classify(texts, params):
     neg_count = params[1]
     positive_class_word_counter = params[2]
     negative_class_word_counter = params[3]
-    probalities = []    
+    vocab = params[4]
+    probalities = []   
+    i = 0
     for text in tokens:
+        text_set = set(text)
         p_pos = math.log(0.5)
         p_neg = math.log(0.5)
-        for word in text:
-            word_p_pos = positive_class_word_counter.get(word, 1.0) + ALPHA
-            word_p_neg = negative_class_word_counter.get(word, 1.0) + ALPHA
-            word_p_pos = word_p_pos / (pos_count + (len(positive_class_word_counter)+1)*ALPHA)
-            p_pos += math.log(word_p_pos)
-           
-            word_p_neg = word_p_neg / (neg_count + (len(negative_class_word_counter)+1)*ALPHA)
-            p_neg += math.log(word_p_neg)
+        for idx in range(len(vocab)):
+            exist_in_pos = 0
+            exist_in_neg = 0
+            if vocab[idx] in text_set:
+                if positive_class_word_counter.get(vocab[idx], 0) != 0:
+                    exist_in_pos = 1
+                if negative_class_word_counter.get(vocab[idx], 0) != 0:
+                    exist_in_neg = 1
+            p_pos += math.log(exist_in_pos*positive_class_word_counter.get(vocab[idx], 0)/pos_count 
+                + (1 - exist_in_pos)*(1-positive_class_word_counter.get(vocab[idx], 0)/pos_count))
+            p_neg += math.log(exist_in_neg*negative_class_word_counter.get(vocab[idx], 0) /neg_count
+                + (1 - exist_in_neg)*(1-negative_class_word_counter.get(vocab[idx], 0)/neg_count))
+        # for idx in range(len(positive_class_word_counter)):
+        #     exist_in_pos = 0
+        #     if positive_class_word_counter[idx] in text_set:
+        #         exist_in_pos = 1
+        #     p_pos += math.log(exist_in_pos*positive_class_word_counter[idx]/pos_count 
+        #         + (1 - exist_in_pos)*(1-positive_class_word_counter[idx]/pos_count))
+
+        # for idx in range(len(negative_class_word_counter)):
+        #     exist_in_neg = 0
+        #     if negative_class_word_counter[idx] in text_set:
+        #         exist_in_neg = 1
+        #     p_neg += math.log(exist_in_neg*negative_class_word_counter[idx] /neg_count
+        #         + (1 - exist_in_neg)*(1-negative_class_word_counter[idx]/neg_count))
+
         if (p_pos > p_neg):
             probalities.append('pos')
         else:
